@@ -2,9 +2,7 @@ import json
 import telebot
 import sqlite3
 import threading
-import time
-
-from autocon import download_convert_schedule
+import datetime
 
 
 
@@ -26,6 +24,7 @@ def get_schedule(group):
         para_num = 1
         para_found = False
         subgroup_schedule = ""
+        
 
         for key in [
             'key2', 'key3', 'key4', 'key5', 'key6', 'key7', 'key8', 
@@ -75,16 +74,48 @@ def get_schedule(group):
         return "Неверная группа"    
 
 
+def log_message(message):
+    now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    log_message = f"{now} - {message.chat.username} ({message.chat.id}): {message.text}"
+    with open('bot_log.txt', 'a', encoding='utf-8') as f:
+        f.write(log_message + '\n')   
+
+@bot.message_handler(func=lambda message: message.chat.id == 784975687 and message.text.startswith('/to'))
+def send_to_one(message):
+    try:
+        log_message(message)
+        parts = message.text.split(maxsplit=2)
+        if len(parts) != 3:
+            bot.reply_to(message, "Неправильный формат команды. \n Используйте: /to 'айди пользователя' 'сообщение'")
+            return
+
+        _, user_id, message_text = parts
+
+        try:
+            user_id = int(user_id)
+        except ValueError:
+            bot.reply_to(message, "Неправильный формат айди пользователя. Айди должен быть числом.")
+            return
+        try:
+            bot.send_message(user_id, message_text)
+            bot.reply_to(message, f"Сообщение успешно отправлено пользователю с айди {user_id}.")
+        except Exception as e:
+            bot.reply_to(message, f"Ошибка при отправке сообщения пользователю с айди {user_id}: {str(e)}")
+    except Exception as e:
+        bot.reply_to(message, f"Произошла ошибка: {str(e)}")
+
+
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     conn = sqlite3.connect('rasp.db')
     cursor = conn.cursor()
     user_id = message.chat.id
     username = message.chat.username if message.chat.username else None
-    cursor.execute("INSERT OR IGNORE INTO users (user_id, username, active) VALUES (?, ?, ?)", (user_id, username, 1))
+    cursor.execute("INSERT OR IGNORE INTO users (user_id, username, active) VALUES (?, ?, ?)", (user_id, "None", 1))
     conn.commit()
     conn.close()
-    bot.reply_to(message, "Привет! Я бот для вывода расписания группы. ")
+    bot.reply_to(message, "Привет! Я бот для вывода расписания группы. \n Напиши номер своей группы")
+    log_message(message)
 
 
 @bot.message_handler(func=lambda message: message.chat.id == 784975687 and message.text.startswith('/send'))
@@ -96,6 +127,7 @@ def send_to_all(message):
     cursor.execute("SELECT user_id FROM users")
     users = cursor.fetchall()
     conn.close()
+    log_message(message)
     
     for user_id in users:
         try:
@@ -103,8 +135,9 @@ def send_to_all(message):
         except Exception as e:
             print(f"Ошибка при отправке сообщения: {str(e)}")
 
-@bot.message_handler(func=lambda message: True)
+@bot.message_handler(func=lambda message: True) 
 def echo_message(message):
+    log_message(message)
     group = message.text.strip()
     schedule = get_schedule(group)
     if schedule:
@@ -113,5 +146,5 @@ def echo_message(message):
         bot.reply_to(message, "Расписание для указанной группы не найдено.")
 
 if __name__ == '__main__':
-    bot.polling()
+    bot.infinity_polling(timeout=5, long_polling_timeout=10)
 
