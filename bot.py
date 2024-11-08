@@ -6,7 +6,7 @@ import datetime
 
 
 
-bot = telebot.TeleBot('7099372047:AAHirvtNIWBbg87nqzaStxae1cp53B4Xgog')
+bot = telebot.TeleBot('')
 schedule_lock = threading.Lock()
 
 def load_schedule_data():
